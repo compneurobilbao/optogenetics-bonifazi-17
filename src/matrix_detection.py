@@ -32,3 +32,8 @@ for cnt in contours:
 cv2.imshow('img',img)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
+
+
+http://opencvpython.blogspot.com.es/2012/06/sudoku-solver-part-2.html
+http://stackoverflow.com/questions/11424002/how-to-detect-simple-geometric-shapes-using-opencv
+https://dsp.stackexchange.com/questions/3595/finding-squares-in-image
