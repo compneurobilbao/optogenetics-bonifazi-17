@@ -3,79 +3,102 @@
 """
 Created on Mon May 15 11:20:31 2017
 
-@author: https://github.com/rbhambriiit/computer_vision/blob/master/find_color_box
+@author: https://github.com/abidrahmank/OpenCV2-Python/blob/master/OpenCV_Python_Blog/sudoku_v_0.0.6/sudoku.py
 """
 
 import cv2
 import numpy as np
-
-from find_box_3 import resize
-from shapedetector import ShapeDetector
+import time, sys
 
 
+def rectify(h):
+		''' this function put vertices of square we got, in clockwise order '''
+		h = h.reshape((4,2))
+		hnew = np.zeros((4,2),dtype = np.float32)
 
-def analyse_contours_using_shape(cnts,image,box_color):
-    sd = ShapeDetector()
-    for c in cnts:
-        area = cv2.contourArea(c)
-        shape = sd.detect(c)
-        if area > 100 and shape in ['rectangle','square']:
-            M = cv2.moments(c)
-            cX = int((M["m10"] / M["m00"]))
-            cY = int((M["m01"] / M["m00"]))
-            (x, y, w, h) = cv2.boundingRect(c)
+		add = h.sum(1)
+		hnew[0] = h[np.argmin(add)]
+		hnew[2] = h[np.argmax(add)]
+		
+		diff = np.diff(h,axis = 1)
+		hnew[1] = h[np.argmin(diff)]
+		hnew[3] = h[np.argmax(diff)]
 
-            cv2.putText(image, str(shape), (cX, cY-15), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 0, 255), 1)
-            cv2.putText(image, str((cX,cY)), (cX, cY+15), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 0, 255), 1)
-            cv2.drawContours(image, [c], -1, (255,255,255), 2)
-            cv2.rectangle(image, (x, y), (x + w, y + h), box_color, 2)
-            cv2.circle(image, (cX, cY), 2, (255, 255, 0), -1)
+		return hnew
 
 
-def analyse_contours_using_approx(cnts,image,box_color):
-    boxes = []
-    for c in cnts:
-        area = cv2.contourArea(c)
-        if area > 100:
-            epsilon = 0.1 * cv2.arcLength(c, True)
-            approx = cv2.approxPolyDP(c, epsilon, True)
-            if len(approx) >= 4:
-                M = cv2.moments(c)
-                cX = int((M["m10"] / M["m00"]))
-                cY = int((M["m01"] / M["m00"]))
-                (x, y, w, h) = cv2.boundingRect(c)
-                cv2.circle(image, (cX, cY), 2, (255, 0, 0), -1)
-                # cv2.drawContours(image, [approx], -1, (0,255,0), 2)
-                cv2.rectangle(image,(x,y),(x+w,y+h),box_color,2)
-                json = {'rectangle':(x, y, w, h),'centroid':(cX, cY)}
-                boxes.append(json)
-                # cv2.putText(image, str((cX,cY)), (cX, cY - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 0, 255), 1)
-    return boxes
+
+img = cv2.imread('./data/raw/1.jpg')
+gray = cv2.imread('./data/raw/1.jpg', cv2.CV_8UC1)
 
 
-input_image = 'images/4.png'
-image = cv2.imread(input_image)
+thresh = cv2.adaptiveThreshold(gray,255,1,1,5,2)
+im2, contours, hierarchy  = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
-image = resize(image)
-# cv2.imshow('original',image)
+image_area = gray.size	# this is area of the image
 
-roi = image
-
-lower = np.array([50, 50, 50])
-upper = np.array([250, 250, 250])
-shapeMask = cv2.inRange(roi, lower, upper)
-
-shapeMask = 255 - shapeMask
-
-(cnts, _) = cv2.findContours(shapeMask.copy(), cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
-
-blue = (200, 0, 0)
-
-analyse_contours_using_shape(cnts,image,box_color=blue)
-# analyse_contours_using_approx(cnts,image,box_color=blue)
+for i in contours:
+	if cv2.contourArea(i)> image_area/2: # if area of box > half of image area, it is possibly the biggest blob
+		peri = cv2.arcLength(i,True)
+		approx = cv2.approxPolyDP(i,0.02*peri,True)
+		#cv2.drawContours(img,[approx],0,(0,255,0),2,cv2.CV_AA)
+		break
 
 
-cv2.imshow("processed Image", image)
-cv2.imwrite('boxed.jpg',image)
+h = np.array([ [0,0],[449,0],[449,449],[0,449] ],np.float32)	# this is corners of new square image taken in CW order
 
-cv2.waitKey()
+approx = rectify(approx)	# we put the corners of biggest square in CW order to match with h
+
+retval = cv2.getPerspectiveTransform(approx,h)	# apply perspective transformation
+warp = cv2.warpPerspective(img,retval,(450,450))  # Now we get perfect square with size 450x450
+
+warpg = cv2.cvtColor(warp,cv2.COLOR_BGR2GRAY)	# kept a gray-scale copy of warp for further use
+
+
+
+sudo = np.zeros((8,8),np.uint8)		# a 9x9 matrix to store our sudoku puzzle
+
+denoised = cv2.fastNlMeansDenoising(warpg, h=10)
+thresh = cv2.threshold(denoised,20,255,0)
+
+#
+#kernel = cv2.getStructuringElement(cv2.MORPH_CROSS,(1,1))
+#erode = cv2.erode(thresh[1], kernel, iterations =100)
+#dilate =cv2.dilate(erode,kernel,iterations =100)
+
+im3, contours, hierarchy = cv2.findContours(thresh[1], cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+for cnt in contours:
+    area = cv2.contourArea(cnt)
+    if area>2:
+        print('hey')
+	
+		(bx,by,bw,bh) = cv2.boundingRect(cnt)
+		if (100<bw*bh<1200) and (10<bw<40) and (25<bh<45):
+			roi = dilate[by:by+bh,bx:bx+bw]
+			small_roi = cv2.resize(roi,(10,10))
+			feature = small_roi.reshape((1,100)).astype(np.float32)
+			ret,results,neigh,dist = model.find_nearest(feature,k=1)
+			integer = int(results.ravel()[0])
+			
+			gridy,gridx = (bx+bw/2)/50,(by+bh/2)/50	# gridx and gridy are indices of row and column in sudo
+			sudo.itemset((gridx,gridy),integer)
+            
+sudof= sudo.flatten()
+strsudo = ''.join(str(n) for n in sudof)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
