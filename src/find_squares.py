@@ -65,8 +65,15 @@ thresh = cv2.threshold(denoised,20,255,0)
 #kernel = cv2.getStructuringElement(cv2.MORPH_CROSS,(1,1))
 #erode = cv2.erode(thresh[1], kernel, iterations =100)
 #dilate =cv2.dilate(erode,kernel,iterations =100)
+cv2.imwrite('test.png',cv2.drawContours(im3, contours, -1, (25, 255, 0), 1))
 
 im3, contours, hierarchy = cv2.findContours(thresh[1], cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+cv2.imwrite('test.png',cv2.drawContours(im3, contours, -1, (25, 25, 0), 5))
+
+
+
+
 
 for cnt in contours:
     area = cv2.contourArea(cnt)
